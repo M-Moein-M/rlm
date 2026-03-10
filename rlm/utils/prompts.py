@@ -158,7 +158,12 @@ def build_rlm_system_prompt(
     # Insert custom tools section into the system prompt
     final_system_prompt = system_prompt.format(custom_tools_section=custom_tools_section)
 
-    metadata_prompt = f"Your context is a {context_type} with {context_total_length} total characters, and is broken up into chunks of char lengths: {context_lengths}."
+    # For short single-string contexts (likely a plain task, not a dataset), use a
+    # simpler framing so the model doesn't confuse its task with data analysis.
+    if context_type == "str" and context_total_length <= 500:
+        metadata_prompt = f"Your task is provided in the `context` variable ({context_total_length} characters)."
+    else:
+        metadata_prompt = f"Your context is a {context_type} with {context_total_length} total characters, and is broken up into chunks of char lengths: {context_lengths}."
 
     return [
         {"role": "system", "content": final_system_prompt},
@@ -166,8 +171,8 @@ def build_rlm_system_prompt(
     ]
 
 
-USER_PROMPT = """Think step-by-step on what to do using the REPL environment (which contains the context) to answer the prompt.\n\nContinue using the REPL environment, which has the `context` variable, and querying sub-LLMs by writing to ```repl``` tags, and determine your answer. Your next action:"""
-USER_PROMPT_WITH_ROOT = """Think step-by-step on what to do using the REPL environment (which contains the context) to answer the original prompt: \"{root_prompt}\".\n\nContinue using the REPL environment, which has the `context` variable, and querying sub-LLMs by writing to ```repl``` tags, and determine your answer. Your next action:"""
+USER_PROMPT = """Think step-by-step on what to do using the REPL environment (which contains the context) to answer the prompt.\n\nContinue using the REPL environment, which has the `context` variable, and querying sub-LLMs by writing to ```repl``` tags, and determine your answer. Your next action (write a ```repl``` code block now):"""
+USER_PROMPT_WITH_ROOT = """Think step-by-step on what to do using the REPL environment (which contains the context) to answer the original prompt: \"{root_prompt}\".\n\nContinue using the REPL environment, which has the `context` variable, and querying sub-LLMs by writing to ```repl``` tags, and determine your answer. Your next action (write a ```repl``` code block now):"""
 
 
 def build_user_prompt(
@@ -177,7 +182,7 @@ def build_user_prompt(
     history_count: int = 0,
 ) -> dict[str, str]:
     if iteration == 0:
-        safeguard = "You have not interacted with the REPL environment or seen your prompt / context yet. Your next action should be to look through and figure out how to answer the prompt, so don't just provide a final answer yet.\n\n"
+        safeguard = "You have not yet run any code. Your VERY FIRST response MUST be a ```repl``` code block — start by running `print(context)` to inspect your task, then proceed step by step. Do NOT reply conversationally.\n\n"
         prompt = safeguard + (
             USER_PROMPT_WITH_ROOT.format(root_prompt=root_prompt) if root_prompt else USER_PROMPT
         )
