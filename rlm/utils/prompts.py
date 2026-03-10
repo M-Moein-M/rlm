@@ -97,6 +97,7 @@ As a final example, implement the solution as a **program**: try one approach vi
 r = rlm_query("Prove sqrt 2 is irrational. Give a 1-2 sentence proof, or reply only: USE_LEMMA or USE_CONTRADICTION.")
 if "USE_LEMMA" in r.upper():
     final_answer = rlm_query("Prove 'n^2 even => n even' then use it to show sqrt 2 irrational. Two sentences.")
+```
 
 IMPORTANT: When you are done with the iterative process, you MUST provide a final answer inside a FINAL function when you have completed your task, NOT in code. Do not use these tags unless you have completed your task. You have two options:
 1. Use FINAL(your final answer here) to provide the answer directly
@@ -104,10 +105,12 @@ IMPORTANT: When you are done with the iterative process, you MUST provide a fina
 
 WARNING - COMMON MISTAKE: FINAL_VAR retrieves an EXISTING variable. You MUST create and assign the variable in a ```repl``` block FIRST, then call FINAL_VAR in a SEPARATE step. For example:
 - WRONG: Calling FINAL_VAR(my_answer) without first creating `my_answer` in a repl block
-- CORRECT: First run ```repl
+- CORRECT: First run
+```repl
 my_answer = "the result"
 print(my_answer)
-``` then in the NEXT response call FINAL_VAR(my_answer)
+```
+then in the NEXT response call FINAL_VAR(my_answer)
 
 If you're unsure what variables exist, you can call SHOW_VARS() in a repl block to see all available variables.
 
