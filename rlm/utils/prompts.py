@@ -171,8 +171,8 @@ def build_rlm_system_prompt(
     ]
 
 
-USER_PROMPT = """Think step-by-step on what to do using the REPL environment (which contains the context) to answer the prompt.\n\nContinue using the REPL environment, which has the `context` variable, and querying sub-LLMs by writing to ```repl``` tags, and determine your answer. Your next action (write a ```repl``` code block now):"""
-USER_PROMPT_WITH_ROOT = """Think step-by-step on what to do using the REPL environment (which contains the context) to answer the original prompt: \"{root_prompt}\".\n\nContinue using the REPL environment, which has the `context` variable, and querying sub-LLMs by writing to ```repl``` tags, and determine your answer. Your next action (write a ```repl``` code block now):"""
+USER_PROMPT = """Think step-by-step on what to do using the REPL environment (which contains the context) to answer the prompt.\n\nContinue using the REPL environment, which has the `context` variable, and querying sub-LLMs by writing to ```repl``` tags, and determine your answer. Your next action (write a ```repl``` code block, OR call FINAL(your answer) if you have already solved the task):"""
+USER_PROMPT_WITH_ROOT = """Think step-by-step on what to do using the REPL environment (which contains the context) to answer the original prompt: \"{root_prompt}\".\n\nContinue using the REPL environment, which has the `context` variable, and querying sub-LLMs by writing to ```repl``` tags, and determine your answer. Your next action (write a ```repl``` code block, OR call FINAL(your answer) if you have already solved the task):"""
 
 
 def build_user_prompt(
@@ -182,7 +182,7 @@ def build_user_prompt(
     history_count: int = 0,
 ) -> dict[str, str]:
     if iteration == 0:
-        safeguard = "You have not yet run any code. Your VERY FIRST response MUST be a ```repl``` code block — start by running `print(context)` to inspect your task, then proceed step by step. Do NOT reply conversationally.\n\n"
+        safeguard = "You have not yet run any code. Your VERY FIRST response MUST be a ```repl``` code block — inspect the context and plan your approach (for large contexts, check its type/length first and chunk accordingly; do not print the entire context at once). Do NOT reply conversationally.\n\n"
         prompt = safeguard + (
             USER_PROMPT_WITH_ROOT.format(root_prompt=root_prompt) if root_prompt else USER_PROMPT
         )
