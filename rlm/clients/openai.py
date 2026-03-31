@@ -57,6 +57,7 @@ class OpenAIClient(BaseLM):
         self.client = openai.OpenAI(**client_kwargs)
         self.async_client = openai.AsyncOpenAI(**client_kwargs)
         self.model_name = model_name
+        self.temperature = 0.3
         self.base_url = base_url  # Track for cost extraction
 
         # Per-model usage tracking
@@ -83,7 +84,7 @@ class OpenAIClient(BaseLM):
             extra_body["usage"] = {"include": True}
 
         response = self.client.chat.completions.create(
-            model=model, messages=messages, extra_body=extra_body
+            model=model, messages=messages, extra_body=extra_body, temperature=self.temperature
         )
         self._track_cost(response, model)
         return response.choices[0].message.content
@@ -107,7 +108,7 @@ class OpenAIClient(BaseLM):
             extra_body["usage"] = {"include": True}
 
         response = await self.async_client.chat.completions.create(
-            model=model, messages=messages, extra_body=extra_body
+            model=model, messages=messages, extra_body=extra_body, temperature=self.temperature
         )
         self._track_cost(response, model)
         return response.choices[0].message.content
