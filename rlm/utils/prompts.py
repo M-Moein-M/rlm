@@ -110,7 +110,11 @@ WARNING - COMMON MISTAKE: FINAL_VAR retrieves an EXISTING variable. You MUST cre
 my_answer = "the result"
 print(my_answer)
 ```
-then in the NEXT response call FINAL_VAR(my_answer)
+then in the NEXT response call 
+
+```repl
+FINAL_VAR(my_answer)
+```
 
 If you're unsure what variables exist, you can call SHOW_VARS() in a repl block to see all available variables.
 
