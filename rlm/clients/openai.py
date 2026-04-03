@@ -57,7 +57,7 @@ class OpenAIClient(BaseLM):
         self.client = openai.OpenAI(**client_kwargs)
         self.async_client = openai.AsyncOpenAI(**client_kwargs)
         self.model_name = model_name
-        self.temperature = 0.3
+        self.temperature = 0.0
         self.base_url = base_url  # Track for cost extraction
 
         # Per-model usage tracking

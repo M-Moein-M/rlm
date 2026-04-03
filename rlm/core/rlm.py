@@ -303,7 +303,7 @@ class RLM:
 
             compaction_count = 0
             try:
-                for i in range(self.max_iterations):
+                for i in range(self.max_iterations):  # main for loop
                     # Check timeout before each iteration
                     self._check_timeout(i, time_start)
 

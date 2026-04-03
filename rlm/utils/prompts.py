@@ -7,6 +7,17 @@ from rlm.core.types import QueryMetadata
 RLM_SYSTEM_PROMPT = textwrap.dedent(
     """You are tasked with answering a query with associated context. You can access, transform, and analyze this context interactively in a REPL environment that can recursively query sub-LLMs, which you are strongly encouraged to use as much as possible. You will be queried iteratively until you provide a final answer.
 
+**Execution discipline (required every iteration):**
+- Every `repl` code block must perform at least one concrete action (e.g., inspect, compute, query, parse, aggregate, or print a result).
+- Comment-only or plan-only `repl` blocks are invalid.
+- Do not repeat the same non-executing planning block across iterations.
+
+**Mandatory first move (iteration 0):**
+Your first `repl` block must do all of the following in executable Python code (not comments):
+1. Inspect context type/size.
+2. Print a short sample.
+3. Decide a chunking/analysis strategy in code (for example by setting chunk variables/logic).
+
 The REPL environment is initialized with:
 1. A `context` variable that contains extremely important information about your query. You should check the content of the `context` variable to understand what you are working with. Make sure you look through it sufficiently as you answer your query.
 2. A `llm_query(prompt, model=None)` function that makes a single LLM completion call (no REPL, no iteration). Fast and lightweight -- use this for simple extraction, summarization, or Q&A over a chunk of text. The sub-LLM can handle around 500K chars.
@@ -175,8 +186,8 @@ def build_rlm_system_prompt(
     ]
 
 
-USER_PROMPT = """Think step-by-step on what to do using the REPL environment (which contains the context) to answer the prompt.\n\nContinue using the REPL environment, which has the `context` variable, and querying sub-LLMs by writing to ```repl``` tags, and determine your answer. Your next action (write a ```repl``` code block, OR call FINAL(your answer) if you have already solved the task):"""
-USER_PROMPT_WITH_ROOT = """Think step-by-step on what to do using the REPL environment (which contains the context) to answer the original prompt: \"{root_prompt}\".\n\nContinue using the REPL environment, which has the `context` variable, and querying sub-LLMs by writing to ```repl``` tags, and determine your answer. Your next action (write a ```repl``` code block, OR call FINAL(your answer) if you have already solved the task):"""
+USER_PROMPT = """Think step-by-step on what to do using the REPL environment (which contains the context) to answer the prompt.\n\nContinue using the REPL environment, which has the `context` variable, and querying sub-LLMs by writing to ```repl``` tags, and determine your answer. Each iteration must execute at least one concrete action (no comment-only planning blocks). Your next action (write a ```repl``` code block, OR call FINAL(your answer) if you have already solved the task):"""
+USER_PROMPT_WITH_ROOT = """Think step-by-step on what to do using the REPL environment (which contains the context) to answer the original prompt: \"{root_prompt}\".\n\nContinue using the REPL environment, which has the `context` variable, and querying sub-LLMs by writing to ```repl``` tags, and determine your answer. Each iteration must execute at least one concrete action (no comment-only planning blocks). Your next action (write a ```repl``` code block, OR call FINAL(your answer) if you have already solved the task):"""
 
 
 def build_user_prompt(
@@ -186,7 +197,7 @@ def build_user_prompt(
     history_count: int = 0,
 ) -> dict[str, str]:
     if iteration == 0:
-        safeguard = "You have not yet run any code. Your VERY FIRST response MUST be a ```repl``` code block — inspect the context and plan your approach (for large contexts, check its type/length first and chunk accordingly; do not print the entire context at once). Do NOT reply conversationally.\n\n"
+        safeguard = "You have not yet run any code. Your VERY FIRST response MUST be a ```repl``` code block that executes concrete actions only (no comment-only planning): (1) inspect context type/length, (2) print a short sample, and (3) implement chunking/analysis strategy in code (for large contexts, do not print the entire context at once). Do NOT reply conversationally.\n\n"
         prompt = safeguard + (
             USER_PROMPT_WITH_ROOT.format(root_prompt=root_prompt) if root_prompt else USER_PROMPT
         )
