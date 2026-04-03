@@ -5,7 +5,7 @@ from rlm.core.types import QueryMetadata
 
 # System prompt for the REPL environment with explicit final answer checking
 RLM_SYSTEM_PROMPT = textwrap.dedent(
-    """You are tasked with answering a query with associated context. You can access, transform, and analyze this context interactively in a REPL environment that can recursively query sub-LLMs, which you are strongly encouraged to use as much as possible. You will be queried iteratively until you provide a final answer.
+    '''You are tasked with answering a query with associated context. You can access, transform, and analyze this context interactively in a REPL environment that can recursively query sub-LLMs, which you are strongly encouraged to use as much as possible. You will be queried iteratively until you provide a final answer.
 
 **Execution discipline (required every iteration):**
 - Every `repl` code block must perform at least one concrete action (e.g., inspect, compute, query, parse, aggregate, or print a result).
@@ -17,6 +17,55 @@ Your first `repl` block must do all of the following in executable Python code (
 1. Inspect context type/size.
 2. Print a short sample.
 3. Decide a chunking/analysis strategy in code (for example by setting chunk variables/logic).
+
+**Stdout size discipline (required):**
+- Never print an entire large context, chunk, or long string variable.
+- Always print bounded previews and metadata (lengths/counts) instead of full payloads.
+- If a string may be large, print only a capped slice (for example first/last 300-1000 chars).
+- Keep per-iteration stdout concise so it can safely fit into the next iteration context.
+
+Use patterns like these:
+```repl
+# String preview
+print("len:", len(text))
+print(text[:800])
+print(text[-300:])
+
+# List preview
+print("items:", len(chunks))
+print(chunks[:2])
+
+# Dict preview
+print("keys:", list(obj.keys())[:20])
+```
+
+**Subcall prompt quality (required):**
+- Do not send generic subcalls like "Analyze this text".
+- For every `llm_query` / `rlm_query` subcall, explicitly include:
+    1. Task context (what problem you are solving and why this chunk matters).
+    2. Exact targets to extract/check (specific findings, entities, criteria, or decisions).
+    3. Output format constraints (for example fixed fields, short bullet list, or one-line diagnosis).
+    4. Evidence requirement (quote or reference the relevant snippet from the provided chunk).
+- If processing chunks, label chunk id/range in the prompt and ask for only chunk-grounded conclusions.
+
+Use a pattern like this:
+```repl
+chunk_prompt = f"""
+Task: Determine the most likely diagnosis for the palpable right-breast abnormality.
+Chunk: {{chunk_id}} of {{num_chunks}}.
+What to look for:
+- Imaging descriptors (shape, margin, density/signal, calcification pattern, location)
+- Differential clues that support or exclude benign oil cyst/fat necrosis
+- Any explicit diagnosis statements in this chunk
+Output format:
+- diagnosis_candidate: <short string or NONE>
+- supporting_evidence: <1-2 direct quotes from this chunk>
+- confidence: <low|medium|high>
+Only use evidence from this chunk; do not use outside assumptions.
+Chunk text:\n{{chunk_text}}
+"""
+result = llm_query(chunk_prompt)
+```
 
 The REPL environment is initialized with:
 1. A `context` variable that contains extremely important information about your query. You should check the content of the `context` variable to understand what you are working with. Make sure you look through it sufficiently as you answer your query.
@@ -130,7 +179,7 @@ FINAL_VAR(my_answer)
 If you're unsure what variables exist, you can call SHOW_VARS() in a repl block to see all available variables.
 
 Think step by step carefully, plan, and execute this plan immediately in your response -- do not just say "I will do this" or "I will do that". Output to the REPL environment and recursive LLMs as much as possible. Remember to explicitly answer the original query in your final answer.
-"""
+'''
 )
 
 
@@ -186,8 +235,8 @@ def build_rlm_system_prompt(
     ]
 
 
-USER_PROMPT = """Think step-by-step on what to do using the REPL environment (which contains the context) to answer the prompt.\n\nContinue using the REPL environment, which has the `context` variable, and querying sub-LLMs by writing to ```repl``` tags, and determine your answer. Each iteration must execute at least one concrete action (no comment-only planning blocks). Your next action (write a ```repl``` code block, OR call FINAL(your answer) if you have already solved the task):"""
-USER_PROMPT_WITH_ROOT = """Think step-by-step on what to do using the REPL environment (which contains the context) to answer the original prompt: \"{root_prompt}\".\n\nContinue using the REPL environment, which has the `context` variable, and querying sub-LLMs by writing to ```repl``` tags, and determine your answer. Each iteration must execute at least one concrete action (no comment-only planning blocks). Your next action (write a ```repl``` code block, OR call FINAL(your answer) if you have already solved the task):"""
+USER_PROMPT = """Think step-by-step on what to do using the REPL environment (which contains the context) to answer the prompt.\n\nContinue using the REPL environment, which has the `context` variable, and querying sub-LLMs by writing to ```repl``` tags, and determine your answer. Each iteration must execute at least one concrete action (no comment-only planning blocks), prints must be bounded previews (never full large strings/chunks), and subcalls must use specific task-targeted prompts (not generic 'analyze this text'). Your next action (write a ```repl``` code block, OR call FINAL(your answer) if you have already solved the task):"""
+USER_PROMPT_WITH_ROOT = """Think step-by-step on what to do using the REPL environment (which contains the context) to answer the original prompt: \"{root_prompt}\".\n\nContinue using the REPL environment, which has the `context` variable, and querying sub-LLMs by writing to ```repl``` tags, and determine your answer. Each iteration must execute at least one concrete action (no comment-only planning blocks), prints must be bounded previews (never full large strings/chunks), and subcalls must use specific task-targeted prompts (not generic 'analyze this text'). Your next action (write a ```repl``` code block, OR call FINAL(your answer) if you have already solved the task):"""
 
 
 def build_user_prompt(
@@ -197,7 +246,7 @@ def build_user_prompt(
     history_count: int = 0,
 ) -> dict[str, str]:
     if iteration == 0:
-        safeguard = "You have not yet run any code. Your VERY FIRST response MUST be a ```repl``` code block that executes concrete actions only (no comment-only planning): (1) inspect context type/length, (2) print a short sample, and (3) implement chunking/analysis strategy in code (for large contexts, do not print the entire context at once). Do NOT reply conversationally.\n\n"
+        safeguard = "You have not yet run any code. Your VERY FIRST response MUST be a ```repl``` code block that executes concrete actions only (no comment-only planning): (1) inspect context type/length, (2) print only a short bounded sample, and (3) implement chunking/analysis strategy in code (for large contexts, do not print the entire context at once). Do NOT reply conversationally.\n\n"
         prompt = safeguard + (
             USER_PROMPT_WITH_ROOT.format(root_prompt=root_prompt) if root_prompt else USER_PROMPT
         )
