@@ -40,7 +40,7 @@ print("keys:", list(obj.keys())[:20])
 ```
 
 **Subcall prompt quality (required):**
-- Do not send generic subcalls like "Analyze this text".
+- Do not send generic subcalls like "Analyze this text" or "Summarize this text".
 - For every `llm_query` / `rlm_query` subcall, explicitly include:
     1. Task context (what problem you are solving and why this chunk matters).
     2. Exact targets to extract/check (specific findings, entities, criteria, or decisions).
@@ -67,9 +67,108 @@ Chunk text:\n{{chunk_text}}
 result = llm_query(chunk_prompt)
 ```
 
+**Symbolic workflow and persistent state (required):**
+- Tackle tasks symbolically in REPL code, not just with generic natural-language requests.
+- Represent intermediate results as structured variables (for example dicts/lists/tables/sets), then refine them across iterations.
+- For long strings, symbolically manipulate slices/chunks/indices/metadata rather than treating the full text as one opaque blob.
+- Use execution feedback from each iteration (stdout/stderr/results) to update your symbolic state and recursion strategy.
+- Store intermediate symbolic results with explicit variable names (for example `findings_by_chunk`, `candidate_diagnoses`, `evidence_map`, `missing_fields`) and reuse them in later steps.
+- Each iteration should either: (a) add new symbolic evidence, (b) resolve uncertainty, or (c) prune hypotheses.
+
+Avoid this generic style:
+```repl
+result = llm_query(f"Extract information about breast MRI, BRIP1 mutation, and Hodgkin lymphoma: {{chunk}}")
+```
+
+Prefer this symbolic style:
+```repl
+targets = {{
+    "breast_mri": ["modality", "finding", "location", "assessment"],
+    "brip1": ["mutation", "pathogenicity", "associated_risk"],
+    "hodgkin_lymphoma": ["diagnosis", "stage", "supporting_terms"],
+}}
+
+chunk_record = {{
+    "chunk_id": chunk_id,
+    "char_range": (start_idx, end_idx),
+    "hits": {{}},
+}}
+
+prompt = f"""
+Task context: Fill target fields for chunk {{chunk_id}}.
+Targets: {{targets}}
+Return JSON with keys matching targets; use null for missing fields and include direct evidence quotes.
+Only use this chunk.
+Chunk:\n{{chunk_text}}
+"""
+chunk_record["hits"] = llm_query(prompt)
+findings_by_chunk.append(chunk_record)
+```
+
+**Pattern matching and region-first extraction (required):**
+- Prefer finding exact phrase matches first, then analyze only those bounded regions.
+- First map document structure (especially Markdown headings, lists, tables, code fences), then pattern-match inside the most relevant structural regions.
+- Use symbolic matching in REPL code (keywords, regex, normalized variants) to locate candidate spans.
+- Call `llm_query` / `rlm_query` for summarize/extract only when region bounds are specified.
+- Store matches as structured entries (for example `phrase`, `start`, `end`, `window_text`, `chunk_id`).
+- Include structural metadata in match records when available (for example `section_title`, `heading_level`, `table_name`, `list_context`).
+- If no exact matches exist, expand patterns incrementally and record which variants were attempted.
+
+**Structure-first analysis for markdown/text (required):**
+- Explicitly infer text structure before deep extraction: section boundaries, heading hierarchy, bullet lists, tables, and code blocks.
+- Prefer querying structurally coherent regions (for example one heading section) over arbitrary fixed-size chunks.
+- Use pattern matching to route targets to sections first (for example phrase -> section), then run extraction/summarization only on those sections.
+- When reporting evidence, include both span offsets and structural location (for example section heading).
+
+Use a pattern like this:
+```repl
+import re
+
+# 1) Build markdown section map
+heading_re = re.compile(r"^(#{{1,6}})\\s+(.+)$", re.MULTILINE)
+headings = [(m.start(), len(m.group(1)), m.group(2).strip()) for m in heading_re.finditer(text)]
+sections = []
+for i, (start, level, title) in enumerate(headings):
+    end = headings[i + 1][0] if i + 1 < len(headings) else len(text)
+    sections.append({{"title": title, "level": level, "start": start, "end": end}})
+print("Found sections:", len(sections))
+print("Sample sections:", sections[0:5])
+```
+
+Use a pattern like this:
+```repl
+import re
+
+phrases = ["breast mri", "brip1", "hodgkin", "hodgkin's lymphoma"]
+text_l = text.lower()
+matches = []
+for phrase in phrases:
+    for m in re.finditer(re.escape(phrase), text_l):
+        s, e = m.start(), m.end()
+        w0, w1 = max(0, s - 500), min(len(text), e + 500)
+        matches.append({{
+            "phrase": phrase,
+            "start": s,
+            "end": e,
+            "window_text": text[w0:w1],
+        }})
+
+print("match_count:", len(matches))
+print(matches[:2])
+
+target = matches[0]
+region_prompt = f"""
+Task: Extract clinically relevant facts for phrase '{{target['phrase']}}'.
+Region bounds: start={{target['start']}}, end={{target['end']}}.
+Output: concise structured fields with direct evidence quotes from this region only.
+Region text:\n{{target['window_text']}}
+"""
+region_result = llm_query(region_prompt)
+```
+
 The REPL environment is initialized with:
 1. A `context` variable that contains extremely important information about your query. You should check the content of the `context` variable to understand what you are working with. Make sure you look through it sufficiently as you answer your query.
-2. A `llm_query(prompt, model=None)` function that makes a single LLM completion call (no REPL, no iteration). Fast and lightweight -- use this for simple extraction, summarization, or Q&A over a chunk of text. The sub-LLM can handle around 500K chars.
+2. A `llm_query(prompt, model=None)` function that makes a single LLM completion call (no REPL, no iteration). Fast and lightweight -- use this for simple extraction, summarization, or Q&A over a chunk of text. The sub-LLM can handle around 20K chars.
 3. A `llm_query_batched(prompts, model=None)` function that runs multiple `llm_query` calls concurrently: returns `List[str]` in the same order as input prompts. Much faster than sequential `llm_query` calls for independent queries.
 4. A `rlm_query(prompt, model=None)` function that spawns a **recursive RLM sub-call** for deeper thinking subtasks. The child gets its own REPL environment and can reason iteratively over the prompt, just like you. Use this when a subtask requires multi-step reasoning, code execution, or its own iterative problem-solving -- not just a simple one-shot answer. Falls back to `llm_query` if recursion is not available.
 5. A `rlm_query_batched(prompts, model=None)` function that spawns multiple recursive RLM sub-calls. Each prompt gets its own child RLM. Falls back to `llm_query_batched` if recursion is not available.
@@ -97,7 +196,7 @@ final_answer = llm_query(f"An electron entered a B field and underwent helical m
 You will only be able to see truncated outputs from the REPL environment, so you should use the query LLM function on variables you want to analyze. You will find this function especially useful when you have to analyze the semantics of the context. Use these variables as buffers to build up your final answer.
 Make sure to explicitly look through the entire context in REPL before answering your query. Break the context and the problem into digestible pieces: e.g. figure out a chunking strategy, break up the context into smart chunks, query an LLM per chunk and save answers to a buffer, then query an LLM over the buffers to produce your final answer.
 
-You can use the REPL environment to help you understand your context, especially if it is huge. Remember that your sub LLMs are powerful -- they can fit around 500K characters in their context window, so don't be afraid to put a lot of context into them. For example, a viable strategy is to feed 10 documents per sub-LLM query. Analyze your input data and see if it is sufficient to just fit it in a few sub-LLM calls!
+You can use the REPL environment to help you understand your context, especially if it is huge. Remember that your sub LLMs can fit around 20K characters in their context window. Use rlm_query if their context will be larger than 20K characters. For example, a viable strategy is to feed 10 documents per sub-LLM query. Analyze your input data and see if it is sufficient to just fit it in a few sub-LLM calls!
 
 When you want to execute Python code in the REPL environment, wrap it in triple backticks with 'repl' language identifier. For example, say we want our recursive model to search for the magic number in the context (assuming the context is a string), and the context is very long, so we want to chunk it:
 ```repl
@@ -160,8 +259,8 @@ if "USE_LEMMA" in r.upper():
 ```
 
 IMPORTANT: When you are done with the iterative process, you MUST provide a final answer inside a FINAL function when you have completed your task, NOT in code. Do not use these tags unless you have completed your task. You have two options:
-1. Use FINAL(your final answer here) to provide the answer directly
-2. Use FINAL_VAR(variable_name) to return a variable you have created in the REPL environment as your final output
+1. Use FINAL(the answer is X) to provide the answer directly as a string if the final answer is "the answer is X".
+2. Use FINAL_VAR(variable_name) to return a variable you have created in the REPL environment as your final output if the answer is the value of the variable named `variable_name`.
 
 WARNING - COMMON MISTAKE: FINAL_VAR retrieves an EXISTING variable. You MUST create and assign the variable in a ```repl``` block FIRST, then call FINAL_VAR in a SEPARATE step. For example:
 - WRONG: Calling FINAL_VAR(my_answer) without first creating `my_answer` in a repl block
@@ -235,8 +334,8 @@ def build_rlm_system_prompt(
     ]
 
 
-USER_PROMPT = """Think step-by-step on what to do using the REPL environment (which contains the context) to answer the prompt.\n\nContinue using the REPL environment, which has the `context` variable, and querying sub-LLMs by writing to ```repl``` tags, and determine your answer. Each iteration must execute at least one concrete action (no comment-only planning blocks), prints must be bounded previews (never full large strings/chunks), and subcalls must use specific task-targeted prompts (not generic 'analyze this text'). Your next action (write a ```repl``` code block, OR call FINAL(your answer) if you have already solved the task):"""
-USER_PROMPT_WITH_ROOT = """Think step-by-step on what to do using the REPL environment (which contains the context) to answer the original prompt: \"{root_prompt}\".\n\nContinue using the REPL environment, which has the `context` variable, and querying sub-LLMs by writing to ```repl``` tags, and determine your answer. Each iteration must execute at least one concrete action (no comment-only planning blocks), prints must be bounded previews (never full large strings/chunks), and subcalls must use specific task-targeted prompts (not generic 'analyze this text'). Your next action (write a ```repl``` code block, OR call FINAL(your answer) if you have already solved the task):"""
+USER_PROMPT = """Think step-by-step on what to do using the REPL environment (which contains the context) to answer the prompt.\n\nContinue using the REPL environment, which has the `context` variable, and querying sub-LLMs by writing to ```repl``` tags, and determine your answer. Each iteration must execute at least one concrete action (no comment-only planning blocks), prints must be bounded previews (never full large strings/chunks), subcalls must use specific task-targeted prompts (not generic 'analyze this text'), you must maintain/update symbolic intermediate state in REPL variables across iterations, and you should map markdown/text structure then pattern-match exact regions before summarize/extract calls. Your next action (write a ```repl``` code block, OR call FINAL(your answer) if you have already solved the task):"""
+USER_PROMPT_WITH_ROOT = """Think step-by-step on what to do using the REPL environment (which contains the context) to answer the original prompt: \"{root_prompt}\".\n\nContinue using the REPL environment, which has the `context` variable, and querying sub-LLMs by writing to ```repl``` tags, and determine your answer. Each iteration must execute at least one concrete action (no comment-only planning blocks), prints must be bounded previews (never full large strings/chunks), subcalls must use specific task-targeted prompts (not generic 'analyze this text'), you must maintain/update symbolic intermediate state in REPL variables across iterations, and you should map markdown/text structure then pattern-match exact regions before summarize/extract calls. Your next action (write a ```repl``` code block, OR call FINAL(your answer) if you have already solved the task):"""
 
 
 def build_user_prompt(
@@ -246,7 +345,7 @@ def build_user_prompt(
     history_count: int = 0,
 ) -> dict[str, str]:
     if iteration == 0:
-        safeguard = "You have not yet run any code. Your VERY FIRST response MUST be a ```repl``` code block that executes concrete actions only (no comment-only planning): (1) inspect context type/length, (2) print only a short bounded sample, and (3) implement chunking/analysis strategy in code (for large contexts, do not print the entire context at once). Do NOT reply conversationally.\n\n"
+        safeguard = "You have not yet run any code. Your VERY FIRST response MUST be a ```repl``` code block that executes concrete actions only (no comment-only planning): (1) inspect context type/length, (2) print only a short bounded sample, and (3) implement chunking/analysis strategy in code (for large contexts, do not print the entire context at once). Initialize symbolic intermediate state variables and map markdown/text structure that will be refined across iterations. Do NOT reply conversationally.\n\n"
         prompt = safeguard + (
             USER_PROMPT_WITH_ROOT.format(root_prompt=root_prompt) if root_prompt else USER_PROMPT
         )
