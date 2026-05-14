@@ -145,11 +145,13 @@ final_answer = llm_query(f"Aggregate these chunk answers to answer: {{query}}\n\
 **REPL output is truncated**, so use `llm_query` on variables you want to analyze semantically. Use variables as buffers to build your final answer. Look through the entire context before answering; break it and the problem into digestible pieces.
 
 **Final answer (required):**
-When done, provide your answer using one of:
-- `FINAL(the answer is X)` — to return a string directly.
+When done, provide your answer using:
 - `FINAL_VAR(variable_name)` — to return an existing REPL variable.
-
-WARNING: `FINAL_VAR` retrieves an **existing** variable. Always create and assign it in a `repl` block first, then call `FINAL_VAR` in a separate step. Use `SHOW_VARS()` if unsure what variables exist.
+For example:
+```repl
+final_answer = f"Based on the evidence, the most likely diagnosis is breast cancer."
+FINAL_VAR(final_answer)
+```
 
 Think step by step, plan, and execute immediately — do not just say what you will do.
 '''
@@ -208,8 +210,9 @@ def build_rlm_system_prompt(
     ]
 
 
-USER_PROMPT = """Think step-by-step on what to do using the REPL environment (which contains the context) to answer the prompt.\n\nContinue using the REPL environment, which has the `context` variable, and querying sub-LLMs by writing to ```repl``` tags, and determine your answer. Each iteration must execute at least one concrete action (no comment-only planning blocks), prints must be bounded previews (never full large strings/chunks), subcalls must use specific task-targeted prompts (not generic 'analyze this text'), you must maintain/update symbolic intermediate state in REPL variables across iterations, and you should map markdown/text structure then pattern-match exact regions before summarize/extract calls. Your next action (write a ```repl``` code block, OR call FINAL(your answer) if you have already solved the task):"""
-USER_PROMPT_WITH_ROOT = """Think step-by-step on what to do using the REPL environment (which contains the context) to answer the original prompt: \"{root_prompt}\".\n\nContinue using the REPL environment, which has the `context` variable, and querying sub-LLMs by writing to ```repl``` tags, and determine your answer. Each iteration must execute at least one concrete action (no comment-only planning blocks), prints must be bounded previews (never full large strings/chunks), subcalls must use specific task-targeted prompts (not generic 'analyze this text'), you must maintain/update symbolic intermediate state in REPL variables across iterations, and you should map markdown/text structure then pattern-match exact regions before summarize/extract calls. Your next action (write a ```repl``` code block, OR call FINAL(your answer) if you have already solved the task):"""
+USER_PROMPT = """Think step-by-step on what to do using the REPL environment (which contains the context) to answer the prompt.\n\nContinue using the REPL environment, which has the `context` variable, and querying sub-LLMs by writing to ```repl``` tags, and determine your answer. Each iteration must execute at least one concrete action (no comment-only planning blocks), prints must be bounded previews (never full large strings/chunks), subcalls must use specific task-targeted prompts (not generic 'analyze this text'), you must maintain/update symbolic intermediate state in REPL variables across iterations, and you should map markdown/text structure then pattern-match exact regions before summarize/extract calls. Your next action (write a ```repl``` code block, OR call FINAL_VAR(answer) if you have already solved the task and variable `answer` holds the answer):"""
+
+USER_PROMPT_WITH_ROOT = """Think step-by-step on what to do using the REPL environment (which contains the context) to answer the original prompt: \"{root_prompt}\".\n\nContinue using the REPL environment, which has the `context` variable, and querying sub-LLMs by writing to ```repl``` tags, and determine your answer. Each iteration must execute at least one concrete action (no comment-only planning blocks), prints must be bounded previews (never full large strings/chunks), subcalls must use specific task-targeted prompts (not generic 'analyze this text'), you must maintain/update symbolic intermediate state in REPL variables across iterations, and you should map markdown/text structure then pattern-match exact regions before summarize/extract calls. Your next action (write a ```repl``` code block, OR call FINAL_VAR(answer) if you have already solved the task and variable `answer` holds the answer):"""
 
 
 def build_user_prompt(
