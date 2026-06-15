@@ -71,7 +71,7 @@ class VerbosePrinter:
             enabled: Whether verbose printing is enabled. If False, all methods are no-ops.
         """
         self.enabled = enabled
-        self.console = Console() if enabled else None
+        self.console = Console(width=180) if enabled else None
         self._iteration_count = 0
 
     def print_header(

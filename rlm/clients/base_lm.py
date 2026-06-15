@@ -35,3 +35,27 @@ class BaseLM(ABC):
     def get_last_usage(self) -> ModelUsageSummary:
         """Get the last cost summary of the model."""
         raise NotImplementedError
+
+    def _require_text_response(
+        self,
+        content: Any,
+        *,
+        provider: str | None = None,
+        model_name: str | None = None,
+    ) -> str:
+        provider_name = provider or self.__class__.__name__
+        resolved_model = model_name or self.model_name or "unknown"
+        if content is None:
+            raise ValueError(
+                f"{provider_name} returned None content for model '{resolved_model}'."
+            )
+        if not isinstance(content, str):
+            raise TypeError(
+                f"{provider_name} returned non-string content for model '{resolved_model}': "
+                f"{type(content).__name__}"
+            )
+        if content.strip() == "":
+            raise ValueError(
+                f"{provider_name} returned empty content for model '{resolved_model}'."
+            )
+        return content

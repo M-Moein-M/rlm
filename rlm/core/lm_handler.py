@@ -64,6 +64,12 @@ class LMRequestHandler(StreamRequestHandler):
 
         start_time = time.perf_counter()
         content = client.completion(request.prompt)
+        if not isinstance(content, str):
+            raise TypeError(
+                f"LM completion must return a string, got {type(content).__name__}."
+            )
+        if content.strip() == "":
+            raise ValueError("LM completion returned empty content.")
         end_time = time.perf_counter()
 
         model_usage = client.get_last_usage()
@@ -96,6 +102,13 @@ class LMRequestHandler(StreamRequestHandler):
             return await asyncio.gather(*tasks)
 
         results = asyncio.run(run_all())
+        for content in results:
+            if not isinstance(content, str):
+                raise TypeError(
+                    f"LM completion must return a string, got {type(content).__name__}."
+                )
+            if content.strip() == "":
+                raise ValueError("LM completion returned empty content.")
         end_time = time.perf_counter()
 
         total_time = end_time - start_time

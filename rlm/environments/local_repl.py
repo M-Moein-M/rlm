@@ -213,29 +213,40 @@ class LocalREPL(NonIsolatedEnv):
                 self.locals[name] = value
 
     def _final_var(self, variable_name: str | Any) -> str:
-        """Return the value of a variable as a final answer for the main model, or stringify a direct value."""
+        """Return a single-character final answer (direct literal or via a variable)."""
         if not isinstance(variable_name, str):
-            answer = str(variable_name)
-            self._last_final_answer = answer
-            return answer
-        variable_name = variable_name.strip().strip("\"'")
-        if variable_name in self.locals:
-            answer = str(self.locals[variable_name])
-            self._last_final_answer = answer
-            return answer
+            return (
+                "Error: FINAL_VAR expects a single-character string (e.g., FINAL_VAR(\"B\") "
+                "or answer = \"B\"; FINAL_VAR(answer))."
+            )
+
+        cleaned_name = variable_name.strip().strip("\"'")
+        if len(cleaned_name) == 1:
+            self._last_final_answer = cleaned_name
+            return cleaned_name
+
+        if cleaned_name in self.locals:
+            value = self.locals[cleaned_name]
+            if isinstance(value, str) and len(value) == 1:
+                self._last_final_answer = value
+                return value
+            return (
+                f"Error: Variable '{cleaned_name}' must hold a value of single-character string. "
+                "Example: answer = \"B\"; FINAL_VAR(answer)."
+            )
 
         # Provide helpful error message with available variables (do not set _last_final_answer)
         available = [k for k in self.locals.keys() if not k.startswith("_")]
         if available:
             return (
-                f"Error: Variable '{variable_name}' not found. "
+                f"Error: Variable '{cleaned_name}' not found. "
                 f"Available variables: {available}. "
-                f"You must create and assign a variable BEFORE calling FINAL_VAR on it."
+                "You must create and assign a variable BEFORE calling FINAL_VAR on it."
             )
         return (
-            f"Error: Variable '{variable_name}' not found. "
+            f"Error: Variable '{cleaned_name}' not found. "
             f"No variables have been created yet. "
-            f"You must create and assign a variable in a REPL block BEFORE calling FINAL_VAR on it."
+            "You must create and assign a variable in a REPL block BEFORE calling FINAL_VAR on it."
         )
 
     def _show_vars(self) -> str:

@@ -33,11 +33,16 @@ class MockLM(BaseLM):
         if self._responses is not None:
             if not self._responses:
                 raise IndexError("MockLM: no more responses in list")
-            return self._responses.pop(0)
+            content = self._responses.pop(0)
+            return self._require_text_response(content, provider="MockLM")
         if self._response_fn is not None:
-            return self._response_fn(prompt)
+            content = self._response_fn(prompt)
+            return self._require_text_response(content, provider="MockLM")
         prompt_str = prompt if isinstance(prompt, str) else str(prompt)[:80]
-        return f"Mock response to: {prompt_str}"
+        return self._require_text_response(
+            f"Mock response to: {prompt_str}",
+            provider="MockLM",
+        )
 
     async def acompletion(self, prompt: str | dict[str, Any]) -> str:
         return self.completion(prompt)

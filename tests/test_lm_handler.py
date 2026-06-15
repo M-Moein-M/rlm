@@ -43,3 +43,14 @@ def test_lm_handler_batched_many_prompts_semaphore_cap():
     for i, resp in enumerate(result):
         assert resp.success, (i, resp.error)
         assert resp.chat_completion.response == f"resp-{i}"
+
+
+def test_lm_handler_none_response_errors():
+    """None content should surface as an error response."""
+    mock = MockLM(responses=[None])
+    with LMHandler(client=mock) as handler:
+        request = LMRequest(prompt="hello")
+        response = send_lm_request(handler.address, request)
+    assert not response.success
+    assert response.error is not None
+    assert "None content" in response.error

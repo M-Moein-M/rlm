@@ -57,6 +57,7 @@ class OpenAIClient(BaseLM):
         self.client = openai.OpenAI(**client_kwargs)
         self.async_client = openai.AsyncOpenAI(**client_kwargs)
         self.model_name = model_name
+        self.temperature = 0.0
         self.base_url = base_url  # Track for cost extraction
 
         # Per-model usage tracking
@@ -78,15 +79,22 @@ class OpenAIClient(BaseLM):
         if not model:
             raise ValueError("Model name is required for OpenAI client.")
 
-        extra_body = {}
+        extra_body={"separate_reasoning": True}
         if self.client.base_url == DEFAULT_PRIME_INTELLECT_BASE_URL:
             extra_body["usage"] = {"include": True}
 
         response = self.client.chat.completions.create(
-            model=model, messages=messages, extra_body=extra_body
+            model=model, messages=messages, extra_body=extra_body, temperature=self.temperature
         )
         self._track_cost(response, model)
-        return response.choices[0].message.content
+        content = response.choices[0].message.content
+        if content is None:
+            import json
+            print(20*"-")
+            print("Debug info: Full response content is None. Response object:")
+            print(json.dumps(response.model_dump(), indent=2))
+            print(20*"-")
+        return self._require_text_response(content, provider="OpenAI", model_name=model)
 
     async def acompletion(
         self, prompt: str | list[dict[str, Any]], model: str | None = None
@@ -102,15 +110,16 @@ class OpenAIClient(BaseLM):
         if not model:
             raise ValueError("Model name is required for OpenAI client.")
 
-        extra_body = {}
+        extra_body = {"separate_reasoning": True}
         if self.client.base_url == DEFAULT_PRIME_INTELLECT_BASE_URL:
             extra_body["usage"] = {"include": True}
 
         response = await self.async_client.chat.completions.create(
-            model=model, messages=messages, extra_body=extra_body
+            model=model, messages=messages, extra_body=extra_body, temperature=self.temperature
         )
         self._track_cost(response, model)
-        return response.choices[0].message.content
+        content = response.choices[0].message.content
+        return self._require_text_response(content, provider="OpenAI", model_name=model)
 
     def _track_cost(self, response: openai.ChatCompletion, model: str):
         self.model_call_counts[model] += 1

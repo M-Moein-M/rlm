@@ -69,7 +69,7 @@ class GeminiClient(BaseLM):
         )
 
         self._track_cost(response, model)
-        return response.text
+        return self._require_text_response(response.text, provider="Gemini", model_name=model)
 
     async def acompletion(
         self, prompt: str | list[dict[str, Any]], model: str | None = None
@@ -92,7 +92,7 @@ class GeminiClient(BaseLM):
         )
 
         self._track_cost(response, model)
-        return response.text
+        return self._require_text_response(response.text, provider="Gemini", model_name=model)
 
     def _prepare_contents(
         self, prompt: str | list[dict[str, Any]]
