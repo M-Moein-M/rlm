@@ -88,7 +88,8 @@ class AzureOpenAIClient(BaseLM):
             messages=messages,
         )
         self._track_cost(response, model)
-        return response.choices[0].message.content
+        content = response.choices[0].message.content
+        return self._require_text_response(content, provider="AzureOpenAI", model_name=model)
 
     async def acompletion(
         self, prompt: str | list[dict[str, Any]], model: str | None = None
@@ -109,7 +110,8 @@ class AzureOpenAIClient(BaseLM):
             messages=messages,
         )
         self._track_cost(response, model)
-        return response.choices[0].message.content
+        content = response.choices[0].message.content
+        return self._require_text_response(content, provider="AzureOpenAI", model_name=model)
 
     def _track_cost(self, response: openai.ChatCompletion, model: str):
         self.model_call_counts[model] += 1

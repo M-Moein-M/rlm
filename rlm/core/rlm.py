@@ -594,6 +594,12 @@ class RLM:
         """
         iter_start = time.perf_counter()
         response = lm_handler.completion(prompt)
+        if not isinstance(response, str):
+            raise TypeError(
+                f"LM completion must return a string, got {type(response).__name__}."
+            )
+        if response.strip() == "":
+            raise ValueError("LM completion returned empty content.")
         code_block_strs = find_code_blocks(response)
         code_blocks = []
 

@@ -48,7 +48,8 @@ class PortkeyClient(BaseLM):
             messages=messages,
         )
         self._track_cost(response, model)
-        return response.choices[0].message.content
+        content = response.choices[0].message.content
+        return self._require_text_response(content, provider="Portkey", model_name=model)
 
     async def acompletion(self, prompt: str | dict[str, Any], model: str | None = None) -> str:
         if isinstance(prompt, str):
@@ -64,7 +65,8 @@ class PortkeyClient(BaseLM):
 
         response = await self.async_client.chat.completions.create(model=model, messages=messages)
         self._track_cost(response, model)
-        return response.choices[0].message.content
+        content = response.choices[0].message.content
+        return self._require_text_response(content, provider="Portkey", model_name=model)
 
     def _track_cost(self, response: ChatCompletions, model: str):
         self.model_call_counts[model] += 1

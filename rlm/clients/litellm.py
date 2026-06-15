@@ -51,7 +51,8 @@ class LiteLLMClient(BaseLM):
 
         response = litellm.completion(**kwargs)
         self._track_cost(response, model)
-        return response.choices[0].message.content
+        content = response.choices[0].message.content
+        return self._require_text_response(content, provider="LiteLLM", model_name=model)
 
     async def acompletion(
         self, prompt: str | list[dict[str, Any]], model: str | None = None
@@ -75,7 +76,8 @@ class LiteLLMClient(BaseLM):
 
         response = await litellm.acompletion(**kwargs)
         self._track_cost(response, model)
-        return response.choices[0].message.content
+        content = response.choices[0].message.content
+        return self._require_text_response(content, provider="LiteLLM", model_name=model)
 
     def _track_cost(self, response, model: str):
         self.model_call_counts[model] += 1
